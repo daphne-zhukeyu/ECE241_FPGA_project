@@ -11,11 +11,12 @@ add wave -divider "Inputs"
 add wave -label clk    /tb_demo_player/clk
 add wave -label reset  /tb_demo_player/reset
 add wave -label enable /tb_demo_player/enable
+add wave -label song_sel /tb_demo_player/song_sel
 
 add wave -divider "Demo state"
 add wave -label step  -radix unsigned /tb_demo_player/dut/step
 add wave -label idx   -radix unsigned /tb_demo_player/dut/idx
-add wave -label long  /tb_demo_player/dut/long
+add wave -label len   -radix unsigned /tb_demo_player/dut/len
 add wave -label gap   /tb_demo_player/dut/gap
 add wave -label timer -radix unsigned /tb_demo_player/dut/timer
 
