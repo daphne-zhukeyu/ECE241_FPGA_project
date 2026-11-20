@@ -1,4 +1,4 @@
-# FPGA Digital Piano
+# FPGA Digital Piano — Milestone 1
 
 Top-level entity: `piano_top` (Quartus project `piano.qpf`, DE1-SoC 5CSEMA5F31C6).
 
@@ -32,9 +32,11 @@ demo_player (SW9) ┘                                           ├─► piano_
 |---|---|
 | KEY[0] | reset |
 | SW[0]..SW[6] | hold Do..Si |
-| SW[9] | demo mode: plays "Twinkle Twinkle Little Star" (42 notes, 120 BPM) and loops; ignores SW[6:0] |
+| SW[9] | demo: plays "Twinkle Twinkle Little Star" (42 notes, 120 BPM) and loops; ignores SW[6:0] |
+| SW[8] | demo: plays "Ode to Joy" (62 notes) and loops; ignores SW[6:0] |
+| SW8 + SW9 | error: silent, HEX2–HEX0 show "Err" |
 | LEDR[6:0] | keys held · LEDR[9:7] = active note number |
-| HEX0 | note letter C d E F G A b, `-` when silent |
+| HEX0 | note letter C d E F G A b, `-` when silent (HEX2–HEX0 = "Err" in error mode) |
 
 ## Simulation status (Icarus Verilog, already passing)
 
@@ -51,6 +53,7 @@ ModelSim: create a project with `rtl/*.v` + the testbench, run `vsim tb_note_con
 3. SW0..SW6 one at a time: correct key lights in its colour, bar appears above it, HEX0 shows the letter, tone pitch rises Do→Si.
 4. Overlap: hold SW2, then SW5 → La plays; drop SW5 → back to Mi.
 5. All switches off → silence, no key lit, HEX0 `-`.
-6. SW9 on → Twinkle Twinkle Little Star plays (and loops); highlights track the sound.
+6. SW9 on → Twinkle Twinkle plays; SW8 on (SW9 off) → Ode to Joy plays; highlights track the sound.
+   Both on → silence and "Err" on HEX2–HEX0.
 7. Press KEY[0] during playback → resets to silence.
 Record a short video of steps 3 and 6 for the milestone check-off.
