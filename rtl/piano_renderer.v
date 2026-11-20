@@ -10,17 +10,20 @@
 //   key labels DO RE MI ...  y 405..418  (5x7 font, 2x scale)
 //
 // The pressed white key is filled with a light tint of its note colour.
+// How it works: no frame buffer. For every pixel the VGA controller asks
+// about, this logic checks which shape (key, label, bar, title) the pixel
+// falls in and outputs that colour. Later checks draw on top of earlier ones.
 
 module piano_renderer (
-    input      [9:0] x,
-    input      [9:0] y,
+    input      [9:0] x,             // current pixel column (from vga_controller)
+    input      [9:0] y,             // current pixel row
     input      [2:0] active_note,   // 0 = none, 1..7 = Do..Si
-    output reg [7:0] r,
+    output reg [7:0] r,             // pixel colour, 8 bits per channel
     output reg [7:0] g,
     output reg [7:0] b
 );
 
-    // ---------------- geometry ----------------
+    // ---------------- geometry (pixels) ----------------
     localparam KEYS_X0   = 10'd40;
     localparam KEY_W     = 10'd80;
     localparam KEYS_X1   = 10'd600;   // KEYS_X0 + 7*KEY_W
@@ -35,6 +38,8 @@ module piano_renderer (
     localparam TITLE_Y0  = 10'd40;
 
     // ---------------- 5x7 font ----------------
+    // Each character is 7 rows of 5 bits; a 1 bit = a lit pixel (bit 4 = leftmost).
+    // Characters are scaled up by repeating each font pixel 2x2 or 4x4.
     // char codes: 0 space, 1 D, 2 O, 3 R, 4 E, 5 M, 6 I, 7 F, 8 A,
     //             9 S, 10 L, 11 P, 12 G, 13 N
     function [4:0] font_row;
@@ -197,18 +202,18 @@ module piano_renderer (
     // ---------------- per-pixel decode ----------------
     reg  [2:0]  key_idx;       // which white key column (0..6)
     reg  [9:0]  key_rel;       // x offset inside that white key (0..79)
-    reg         in_keys;
-    reg         in_black;
+    reg         in_keys;       // pixel inside the keyboard area
+    reg         in_black;      // pixel on a black key
     reg  [23:0] ncol;          // active note colour
     reg  [23:0] tint;          // light version of ncol
     reg  [9:0]  lx;            // label-relative x
     reg  [9:0]  loff;          // label left offset inside the key
-    reg  [9:0]  lwidth;
+    reg  [9:0]  lwidth;        // label width (2 or 3 characters)
     reg  [9:0]  ty;            // title/label-relative y
-    reg  [9:0]  tx;
-    reg  [4:0]  frow;
-    reg  [2:0]  fcol;
-    reg         text_px;
+    reg  [9:0]  tx;            // title-relative x
+    reg  [4:0]  frow;          // one row of the font glyph
+    reg  [2:0]  fcol;          // column inside the glyph (0..4 = lit area)
+    reg         text_px;       // pixel is part of a label letter
 
     always @(*) begin
         // ---- defaults: background ----
@@ -217,7 +222,7 @@ module piano_renderer (
         ncol = note_color(active_note);
         tint = {1'b1, ncol[23:17], 1'b1, ncol[15:9], 1'b1, ncol[7:1]}; // (c/2)+128
 
-        // ---- which white key column ----
+        // ---- which white key column, and where inside it ----
         in_keys = (x >= KEYS_X0) && (x < KEYS_X1) && (y >= KEYS_Y0) && (y < KEYS_Y1);
         key_idx = 3'd0;
         key_rel = 10'd0;
@@ -255,7 +260,7 @@ module piano_renderer (
                 text_px = frow[3'd4 - fcol];
         end
 
-        // ---- draw keyboard ----
+        // ---- draw keyboard: black key > outline > label > pressed tint > ivory ----
         if (in_keys) begin
             if (in_black) begin
                 r = 8'd28; g = 8'd28; b = 8'd34;

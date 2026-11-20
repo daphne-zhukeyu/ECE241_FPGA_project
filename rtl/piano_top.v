@@ -7,6 +7,8 @@
 //   LEDR[6:0]: which keys are held,  LEDR[9:7]: active note number
 //   HEX0     : active note letter (C d E F G A b), '-' when silent
 //
+// Data flow: switches/demo -> key_down -> note_control -> active_note
+//            -> tone_generator (audio), piano_renderer (VGA), LEDR/HEX0.
 // Milestone 2: replace `sw_keys` with key_down[6:0] from the PS/2 decoder.
 
 module piano_top (
@@ -16,7 +18,7 @@ module piano_top (
     output [9:0]  LEDR,
     output reg [6:0] HEX0,
 
-    // audio codec
+    // audio codec (WM8731) and its I2C configuration bus
     input         AUD_ADCDAT,
     inout         AUD_BCLK,
     inout         AUD_ADCLRCK,
@@ -26,7 +28,7 @@ module piano_top (
     output        AUD_DACDAT,
     output        FPGA_I2C_SCLK,
 
-    // VGA
+    // VGA DAC
     output [7:0]  VGA_R,
     output [7:0]  VGA_G,
     output [7:0]  VGA_B,
@@ -37,18 +39,21 @@ module piano_top (
     output        VGA_CLK
 );
 
-    wire reset = ~KEY[0];
+    wire reset = ~KEY[0];          // KEY0 is active-low: pressed = reset
 
     // ---------------- note events ----------------
-    // synchronise the switches into the 50 MHz domain
+    // 2-stage synchronizer: switches change at random times, so pass them
+    // through two registers before use to avoid metastability (2-cycle delay)
     reg [9:0] sw_meta, sw_sync;
     always @(posedge CLOCK_50) begin
         sw_meta <= SW;
         sw_sync <= sw_meta;
     end
 
-    wire [6:0] sw_keys = sw_sync[6:0];
-    wire [6:0] demo_keys;
+    wire [6:0] sw_keys = sw_sync[6:0];   // manual keys from SW0..SW6
+    wire [6:0] demo_keys;                // automatic keys from demo_player
+
+    // Demo: auto-plays Do..Si while SW9 is on
 
     demo_player demo (
         .clk      (CLOCK_50),
@@ -57,6 +62,7 @@ module piano_top (
         .key_down (demo_keys)
     );
 
+    // Select key source: SW9 on -> demo, otherwise the switches
     reg [6:0] key_down;
     always @(*) begin
         if (sw_sync[9])
@@ -65,6 +71,7 @@ module piano_top (
             key_down = sw_keys;
     end
 
+    // Resolve the held keys into one note (0 = silent, 1..7 = Do..Si)
     wire [2:0] active_note;
 
     note_control nc (
@@ -75,6 +82,7 @@ module piano_top (
     );
 
     // ---------------- audio ----------------
+    // Note -> square-wave audio sample
     wire [31:0] sample;
 
     tone_generator tg (
@@ -89,6 +97,8 @@ module piano_top (
     wire [31:0] right_channel_audio_in;
     wire        audio_out_allowed;
 
+    // Course audio IP: sends samples to the codec at 48 kHz. We write the same
+    // sample to both channels whenever its output buffer has room.
     Audio_Controller Audio_Controller (
         .CLOCK_50                (CLOCK_50),
         .reset                   (reset),
@@ -110,6 +120,7 @@ module piano_top (
         .AUD_DACDAT              (AUD_DACDAT)
     );
 
+    // Course IP: configures the codec over I2C at power-up (microphone off)
     avconf #(.USE_MIC_INPUT(0)) avc (
         .FPGA_I2C_SCLK (FPGA_I2C_SCLK),
         .FPGA_I2C_SDAT (FPGA_I2C_SDAT),
@@ -120,8 +131,10 @@ module piano_top (
     // ---------------- VGA ----------------
     wire [9:0] px, py;
     wire [7:0] pr, pg, pb;
-    wire       frame_start;
+    wire       frame_start;            // unused for now
 
+    // Renderer gives the colour of pixel (px, py); vga_controller scans the
+    // screen and drives the VGA pins
     piano_renderer render (
         .x           (px),
         .y           (py),
@@ -151,10 +164,11 @@ module piano_top (
     );
 
     // ---------------- debug outputs ----------------
-    assign LEDR[6:0] = key_down;
-    assign LEDR[9:7] = active_note;
+    // Let us check the logic even without a monitor or speaker
+    assign LEDR[6:0] = key_down;       // keys held
+    assign LEDR[9:7] = active_note;    // note number in binary
 
-    // HEX0 (active-low, {g,f,e,d,c,b,a})
+    // HEX0 shows the note letter (segments are active-low, order {g,f,e,d,c,b,a})
     always @(*) begin
         case (active_note)
             3'd1:    HEX0 = 7'b1000110;  // C
