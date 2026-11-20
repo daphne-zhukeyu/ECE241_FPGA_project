@@ -33,7 +33,7 @@ module demo_player #(
     reg [2:0]  idx;     // note at this step: 0 = Do ... 6 = Si
     reg        long;    // 1 = this note lasts 2 beats
 
-    // ---------------- song ROM: step -> (note, long) ----------------
+    // song ROM: step -> (note, long) 
     always @(*) begin
         long = 1'b0;
         case (step)
@@ -98,7 +98,7 @@ module demo_player #(
             note_cycles = ON_CYCLES;                            // 1 beat minus the gap
     end
 
-    // ---------------- sequencer ----------------
+    // sequencer
     always @(posedge clk) begin
         // Reset or demo off: go back to the start of the song
         if (reset || !enable) begin
