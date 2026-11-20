@@ -1,4 +1,4 @@
-# FPGA Digital Piano — Milestone 1
+# FPGA Digital Piano
 
 Top-level entity: `piano_top` (Quartus project `piano.qpf`, DE1-SoC 5CSEMA5F31C6).
 
