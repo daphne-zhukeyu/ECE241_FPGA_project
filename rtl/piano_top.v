@@ -3,7 +3,9 @@
 // Controls (Milestone 1, before PS/2 keyboard input exists):
 //   KEY[0]   : reset (press = reset)
 //   SW[6:0]  : hold a note  (SW0 = Do ... SW6 = Si)
-//   SW[9]    : demo mode    (auto-plays Do..Si, ignores SW[6:0])
+//   SW[9]    : demo: plays "Twinkle Twinkle Little Star" (ignores SW[6:0])
+//   SW[8]    : demo: plays "Ode to Joy"                  (ignores SW[6:0])
+//   SW8 + SW9: error -> silent, "Err" on HEX2..HEX0
 //   LEDR[6:0]: which keys are held,  LEDR[9:7]: active note number
 //   HEX0     : active note letter (C d E F G A b), '-' when silent
 //
@@ -17,6 +19,8 @@ module piano_top (
     input  [9:0]  SW,
     output [9:0]  LEDR,
     output reg [6:0] HEX0,
+    output reg [6:0] HEX1,
+    output reg [6:0] HEX2,
 
     // audio codec (WM8731) and its I2C configuration bus
     input         AUD_ADCDAT,
@@ -53,19 +57,25 @@ module piano_top (
     wire [6:0] sw_keys = sw_sync[6:0];   // manual keys from SW0..SW6
     wire [6:0] demo_keys;                // automatic keys from demo_player
 
-    // Demo: auto-plays Do..Si while SW9 is on
+    // Mode from SW8/SW9: exactly one on -> play that song, both on -> error
+    wire err     = sw_sync[8] & sw_sync[9];
+    wire demo_on = sw_sync[8] ^ sw_sync[9];
 
+    // Demo: SW9 -> Twinkle Twinkle (song 0), SW8 -> Ode to Joy (song 1)
     demo_player demo (
         .clk      (CLOCK_50),
         .reset    (reset),
-        .enable   (sw_sync[9]),
+        .enable   (demo_on),
+        .song_sel (sw_sync[8]),
         .key_down (demo_keys)
     );
 
-    // Select key source: SW9 on -> demo, otherwise the switches
+    // Select key source: error -> no keys (silent), demo -> song, else switches
     reg [6:0] key_down;
     always @(*) begin
-        if (sw_sync[9])
+        if (err)
+            key_down = 7'd0;
+        else if (demo_on)
             key_down = demo_keys;
         else
             key_down = sw_keys;
@@ -180,6 +190,15 @@ module piano_top (
             3'd7:    HEX0 = 7'b0000011;  // b
             default: HEX0 = 7'b0111111;  // -
         endcase
+        HEX1 = 7'b1111111;               // blank
+        HEX2 = 7'b1111111;               // blank
+
+        // SW8 and SW9 both on: show "Err" on HEX2 HEX1 HEX0
+        if (err) begin
+            HEX2 = 7'b0000110;           // E
+            HEX1 = 7'b0101111;           // r
+            HEX0 = 7'b0101111;           // r
+        end
     end
 
 endmodule
